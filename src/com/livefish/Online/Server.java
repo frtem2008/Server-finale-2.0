@@ -28,6 +28,7 @@ import java.util.*;
  * @version 2.0
  */
 public class Server {
+    private static final boolean askAboutColoring = false;
     /**
      * Singleton instance field
      */
@@ -94,7 +95,10 @@ public class Server {
         clientThreads = new ArrayList<>();
         createSets();
 
-        initLogger(true);
+        if (askAboutColoring)
+            initLogger(useColoredText());
+        else
+            initLogger(true);
         initFileLogger();
         setIdCount();
         fillArrays();
@@ -268,12 +272,11 @@ public class Server {
         logger.print("Ids read from file: ", "Default");
         for (int i = 0; i < idSplit.length; i++) {
             allIds.add(Integer.parseInt(idSplit[i].trim()));
-            //красивый вывод без запятой в конце
-            if (i != idSplit.length - 1) {
+
+            if (i != idSplit.length - 1)
                 System.out.print(Integer.parseInt(idSplit[i].trim()) + ", ");
-            } else {
+            else
                 System.out.print(Integer.parseInt(idSplit[i].trim()));
-            }
         }
         logger.println("", "Default");
     }
@@ -304,9 +307,11 @@ public class Server {
      * @see Server#input
      */
     private void stopServer() {
-        run = false;
         logger.print("Shutting down...", "Disconnection");
-        writeOnOff("Off"); //запись в логи
+        writeOnOff("Off");
+
+        run = false;
+
         ArrayList<Client> clients = new ArrayList<>(connectedClients);
         for (Client client : clients) {
             try {
@@ -346,26 +351,30 @@ public class Server {
      * @see Server#refreshActiveIDs()
      */
     private void disconnectIfInactive(Client client, Thread current) {
-        if (client == null || current == null) {
+        if (client == null || current == null)
             logger.print("Client to disconnect: " + client + ", current thread: " + current, "Wrong data");
-            return;
-        }
-        try {
-            if (client.isUnauthorized())
-                logger.println("Unauthorized client from " + client.getIp() + " disconnected", "Disconnection");
-            else if (client.isAdmin())
-                logger.println("Admin with id " + client.id + " disconnected", "Disconnection");
-            else
-                logger.println("Client with id " + client.id + " disconnected", "Disconnection");
-            writeConnection(client.id, false); //запись в логи
-            connectedClients.remove(client); //удаление сокета из списка активных
-            client.close();
-            current.interrupt(); //остановка потока, обрабатывавшего этот сокет
-            refreshActiveIDs();  //обновление базы активных id при отключении
-        } catch (IOException e) {
-            e.printStackTrace();
-            logger.print("FAILED TO CLOSE CLIENT: " + client, "Error");
-        }
+        else
+            try {
+                if (client.isUnauthorized())
+                    logger.println("Unauthorized client from " + client.getIp() + " disconnected", "Disconnection");
+                else if (client.isAdmin())
+                    logger.println("Admin with id " + client.id + " disconnected", "Disconnection");
+                else
+                    logger.println("Client with id " + client.id + " disconnected", "Disconnection");
+
+                writeConnection(client.id, false);
+
+                connectedClients.remove(client);
+                client.close();
+
+                if (client.clientThread != null)
+                    client.clientThread.interrupt();
+                current.interrupt();
+                refreshActiveIDs();
+            } catch (IOException e) {
+                e.printStackTrace();
+                logger.print("FAILED TO CLOSE CLIENT: " + client, "Error");
+            }
     }
 
     /**
@@ -381,7 +390,7 @@ public class Server {
         BufferedReader in = new BufferedReader(new InputStreamReader(
                 awsHost.openStream()));
 
-        return in.readLine(); //you get the IP as a String
+        return in.readLine();
     }
 
     /**
@@ -398,7 +407,6 @@ public class Server {
      * @see Server#stopServer()
      */
     private void server() {
-        //порт сервера
         final int SERVER_PORT = 26780;
 
         try (ServerSocket server = new ServerSocket(SERVER_PORT)) {
@@ -410,17 +418,14 @@ public class Server {
                 Thread clientThread = new Thread(() -> {
                     Client client = new Client(connection);
                     try {
-                        //переменные для вывода и отправки информации
-                        String data, root, command, args, success;
-                        int adminId, clientToSendId;
-
                         client = login(connection);
                         connectedClients.add(client);
-                        //если логин прошёл успешно
+
                         if (client == null || client.isUnauthorized() || client.id <= 0)
                             disconnectIfInactive(client, Thread.currentThread());
                         else {
                             onlineIds.add(client.id);
+
                             if (client.isAdmin()) {
                                 adminIds.add(client.id);
                                 logger.print("Admin connected: ip address is " + connection.getIp() + ", unique id is " + client.id, "Connection");
@@ -428,153 +433,9 @@ public class Server {
                                 clientIds.add(client.id);
                                 logger.print("Client connected: ip address is " + connection.getIp() + ", unique id is " + client.id, "Connection");
                             }
-
                             writeConnection(client.id, true);
-                            //в бесконечном цикле обрабатываем данные клиента
-                            while (!Thread.currentThread().isInterrupted()) {
-                                data = client.readLine(); //считывание данных
-                                if (data != null) {
-                                    String[] split = data.split("\\$"); //чтобы каждый раз не сплитить строку
 
-                                    //сообщение о неверной команде
-                                    if (split.length == 0) {
-                                        logger.print("Received invalid data from client with id " + client.id, "Wrong data");
-                                        client.writeLine("INVALID$DATA$" + data);
-                                        continue;
-                                    }
-                                    root = split[0]; //информация об отправителе(админ/клиент)
-
-                                    if (root.trim().equals("A")) {
-                                        //добавление информации об админе
-                                        adminId = client.id;
-
-                                        //запись в списки о новом/старом вернувшимся юзере
-                                        adminIds.add(client.id);
-
-                                        //получение информации
-                                        //TODO: 12.02.2023 НОРМАЛЬНОЕ ПОЛНОЕ ПОЛУЧЕНИЕ ИНФОРМАЦИИ
-                                        if (split[1].equals("INFO"))
-                                            if (split.length == 3)
-                                                getInfo(split[2], client);
-                                            else
-                                                client.writeLine("INFO$ERROR$INVALID_SYNTAX$" + data);
-                                        else {
-                                            if (!data.matches("A\\$[\\d]+\\$.+\\$.+")) { //регулярка для обработки
-                                                logger.print("Received invalid data from client with id " + client.id, "Wrong data");
-                                                connection.writeLine("INVALID$DATA$" + data);
-                                                continue;
-                                            }
-                                            logger.print("___________________________________", "Default");
-                                            logger.print("Admin data read: " + data, "Default");
-                                            //получение информации о клиенте
-                                            clientToSendId = Integer.parseInt(split[1]); //уникальный id клиента
-                                            if (clientToSendId == client.id) { //проверка на отправку запроса самому себе
-                                                logger.print("Attempt to send request on itself on id: " + client.id, "Wrong data");
-                                                connection.writeLine("INVALID$SELF_ID$" + client.id);
-                                                continue;
-                                            }
-                                            if (adminIds.contains(clientToSendId)) {//проверка на отправку запроса другому админу
-                                                logger.print("Attempt to send request to admin with id: " + clientToSendId, "Wrong data");
-                                                connection.writeLine("INVALID$ADMIN_ID$" + clientToSendId);
-                                                continue;
-                                            }
-
-                                            logger.print("Id to send: " + clientToSendId, "Default");
-                                            logger.print("Id who sent: " + client.id, "Default");
-
-                                            command = split[2]; //сама команда
-                                            logger.print("Command to send: " + command, "Default");
-
-                                            args = split[3]; //аргументы команды
-                                            logger.print("Args to send: " + args, "Default");
-
-                                            //id запроса выставляется автоматически прямо в конструкторе
-                                            Request thisReq = new Request(adminId, clientToSendId, command, args);
-
-                                            //добавление запроса в список запросов и в файл
-                                            tempRequests.add(thisReq);
-
-                                            //отправка информации нужному клиенту
-                                            refreshActiveIDs();
-                                            Client toSend = getClientById(connectedClients, clientToSendId);
-                                            if (toSend != null) {
-                                                if (allIds.contains(clientToSendId))
-                                                    toSend.writeLine(thisReq.id + "$" + command + "$" + args);
-                                                else { //ошибка отправки данных незарегистрированному клиенту
-                                                    logger.print("Invalid command: this id is free", "Wrong data");
-                                                    connection.writeLine("INVALID$FREE$" + clientToSendId);
-                                                }
-                                            } else { //ошибка отправки оффлайн клиенту
-                                                logger.print("Sending error: system didn't find an online client with id " + clientToSendId, "Error");
-                                                connection.writeLine("INVALID$OFFLINE_CLIENT$" + clientToSendId);
-                                            }
-                                        }
-                                    } else if (root.trim().equals("C")) { //добавление информации о клиенте
-                                        logger.print("___________________________________", "Default");
-                                        logger.print("Client data read: " + data, "Default");
-                                        if (!data.matches("C\\$[\\d]+\\$[\\d]+\\$.+")) {//регулярка для проверки данных, которые прислал клиент
-                                            logger.print("Received invalid data from client with id " + client.id, "Wrong data");
-                                            connection.writeLine("INVALID$DATA$" + data);
-                                            continue;
-                                        }
-                                        //получение уникального идентификатора клиента
-                                        clientToSendId = Integer.parseInt(split[1]);
-                                        clientIds.add(client.id);
-                                        logger.print("Client id to send: " + client.id, "Default");
-
-                                        int commandId = Integer.parseInt(split[2]); //id выполненной команды
-                                        logger.print("Command id: " + commandId, "Default");
-
-                                        //получение команды, которую выполнял клиент, по её id
-                                        Request clientReq = getReqById(tempRequests, commandId);
-
-                                        //получение id админа, отправившего команду
-                                        adminId = clientReq.idA;
-                                        adminIds.add(adminId);
-                                        logger.print("Admin id to send: " + adminId, "Default");
-
-                                        command = clientReq.cmd; //команда, которая была выполнена
-                                        logger.print("Command to send: " + command, "Default");
-
-                                        args = clientReq.args; //аргументы команды
-                                        logger.print("Args to send: " + args, "Default");
-
-                                        success = split[3]; //успех выполнения (success/no success)
-                                        logger.print("Success to send: " + success, "Default");
-
-                                        //формирование ответа админу
-                                        String response = clientToSendId + "$" + command + "$" + args + "$" + success;
-
-                                        //обработка команды по id
-                                        Request done = getReqById(tempRequests, commandId);
-                                        if (done.equals(Request.ZEROREQUEST))
-                                            logger.print("Client " + clientToSendId + " wanted to write a zeroRequest", "Wrong data");
-                                        else {
-                                            //запись запроса в файл
-                                            Request mainReq = new Request(done, success);
-                                            writeRequest(mainReq);
-
-                                            //удаление запроса из промежуточного списка
-                                            tempRequests.remove(done);
-                                            //отправка данных о клиенте админу с id aUniId
-                                            Client toSend = getClientById(connectedClients, adminId);
-                                            if (toSend != null) {
-                                                if (allIds.contains(adminId))
-                                                    toSend.writeLine(response);
-                                                else { //ошибка отправки данных незарегистрированному администратору
-                                                    logger.print("Invalid command: this id is free", "Wrong data");
-                                                    connection.writeLine("INVALID$FREE$" + adminId);
-                                                }
-                                            } else { //ошибка отправки данных оффлайн администратору
-                                                logger.print("Sending error: system didn't find an online admin with id " + adminId, "Error");
-                                                connection.writeLine("INVALID$OFFLINE_ADMIN$" + adminId);
-                                            }
-                                        }
-                                    }
-
-                                    refreshActiveIDs(); //обновление идентификаторов
-                                }
-                            }
+                            communicationLoop(client);
                         }
                     } catch (IOException e) {
                         disconnectIfInactive(client, Thread.currentThread());
@@ -589,6 +450,248 @@ public class Server {
         } finally {
             stopServer();
         }
+    }
+
+    private boolean validateAdminReadData(Client admin, String data) throws IOException {
+        if (!data.matches("A\\$[\\d]+\\$.+\\$.+")) {
+            logger.print("Received invalid data from admin with id " + admin.id, "Wrong data");
+            admin.writeLine("INVALID$DATA$" + data);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean validateClientReadData(Client client, String data) throws IOException {
+        if (!data.matches("C\\$[\\d]+\\$[\\d]+\\$.+")) {
+            logger.print("Received invalid data from client with id " + client.id, "Wrong data");
+            client.writeLine("INVALID$DATA$" + data);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean validateSelfSendId(Client client, int id) throws IOException {
+        if (client.id == id) {
+            logger.print("Attempt to send request on itself on id: " + client.id, "Wrong data");
+            client.writeLine("INVALID$SELF_ID$" + client.id);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean validateAnotherAdminSendId(Client client, int id) throws IOException {
+        if (adminIds.contains(id)) {
+            logger.print("Attempt to send request to admin with id: " + id, "Wrong data");
+            client.writeLine("INVALID$ADMIN_ID$" + id);
+            return false;
+        }
+        return true;
+    }
+
+    private void sendAdminRequest(Client admin, Client client, int clientToSendId, String command, String args) throws IOException {
+        refreshActiveIDs();
+        if (client == null) {
+            logger.print("Sending error: system didn't find an online client with id " + clientToSendId, "Error");
+            admin.writeLine("INVALID$OFFLINE_CLIENT$" + clientToSendId);
+        } else {
+            Request thisReq = new Request(admin.id, clientToSendId, command, args);
+            tempRequests.add(thisReq);
+            if (allIds.contains(clientToSendId))
+                client.writeLine(thisReq.id + "$" + command + "$" + args);
+            else {
+                logger.print("Invalid command: this id is free", "Wrong data");
+                admin.writeLine("INVALID$FREE$" + clientToSendId);
+            }
+        }
+    }
+
+    private void sendRequestSuccess(Client to, Client by, int adminId, String response) throws IOException {
+        refreshActiveIDs();
+        if (to != null) {
+            if (allIds.contains(adminId))
+                to.writeLine(response);
+            else {
+                logger.print("Invalid command: this id is free", "Wrong data");
+                by.writeLine("INVALID$FREE$" + adminId);
+            }
+        } else {
+            logger.print("Sending error: system didn't find an online admin with id " + adminId, "Error");
+            by.writeLine("INVALID$OFFLINE_ADMIN$" + adminId);
+        }
+    }
+
+    private void logDoneRequest(Client by, Request executed, int commandId, String success) {
+        logger.print("Client id to send: " + by.id, "Default");
+        logger.print("Command id: " + commandId, "Default");
+        logger.print("Admin id to send: " + executed.idA, "Default");
+        logger.print("Command to send: " + executed.cmd, "Default");
+        logger.print("Args to send: " + executed.args, "Default");
+        logger.print("Success to send: " + success, "Default");
+        writeRequest(new Request(executed, success));
+        tempRequests.remove(executed);
+    }
+
+    private void sendDoneRequest(Client by, Request executed, int clientToSendId, int commandId, String success) throws IOException {
+        if (executed.equals(Request.ZEROREQUEST))
+            logger.print("Client " + clientToSendId + " wanted to write a zeroRequest", "Wrong data");
+        else {
+            adminIds.add(executed.idA);
+            clientIds.add(by.id);
+
+            logDoneRequest(by, executed, commandId, success);
+
+            sendRequestSuccess(
+                    getClientById(connectedClients, executed.idA),
+                    by,
+                    executed.idA,
+                    clientToSendId + "$" + executed.cmd + "$" + executed.args + "$" + success);
+        }
+
+    }
+
+    private void communicationLoop(Client client) throws IOException {
+        while (!client.clientThread.isInterrupted()) {
+            String readData = client.readLine();
+            if (readData == null || !readData.contains("$")) {
+                logger.print("Received invalid data from client with id " + client.id, "Wrong data");
+                client.writeLine("INVALID$DATA$" + readData);
+                continue;
+            }
+
+            String[] readDataSplit = readData.split("\\$");
+            if (client.isAdmin()) {
+                adminIds.add(client.id);
+
+                if (processInfoCommand(readData, client))
+                    continue;
+                if (!validateAdminReadData(client, readData))
+                    continue;
+
+                logger.print("Admin data read: " + readData, "Default");
+
+                int clientToSendId = Integer.parseInt(readDataSplit[1]);
+                String commandToSend = readDataSplit[2];
+                String argsToSend = readDataSplit[3];
+
+                if (!validateSelfSendId(client, clientToSendId) ||
+                        !validateAnotherAdminSendId(client, clientToSendId)
+                )
+                    continue;
+
+                logger.print("Id to send: " + clientToSendId, "Default");
+                logger.print("Id who sent: " + client.id, "Default");
+                logger.print("Command to send: " + commandToSend, "Default");
+                logger.print("Args to send: " + argsToSend, "Default");
+
+                sendAdminRequest(client, getClientById(connectedClients, clientToSendId), clientToSendId, commandToSend, argsToSend);
+            } else if (client.isClient()) {
+                logger.print("Client data read: " + readData, "Default");
+                if (!validateClientReadData(client, readData))
+                    continue;
+
+                int clientToSendId = Integer.parseInt(readDataSplit[1]);
+                int commandId = Integer.parseInt(readDataSplit[2]);
+                String success = readDataSplit[3];
+
+                sendDoneRequest(
+                        client,
+                        getReqById(tempRequests, commandId),
+                        clientToSendId,
+                        commandId,
+                        success
+                );
+            }
+            refreshActiveIDs();
+        }
+
+    }
+
+
+    /**
+     * Client registration / login function
+     * Performs all checks for valid access
+     *
+     * @param connection A client to register / login
+     *
+     * @return Array of login results:
+     * [0] - client id,
+     * [1] - client root (-1 - failed, 1 - Admin, 2 - Client)
+     *
+     * @see Connection
+     * @see Server#allIds
+     * @see Server#refreshActiveIDs()
+     * @see Server#disconnectIfInactive(Client, Thread)
+     * @see Server#onlineIds
+     * @see FileLogger#logToAll(String, String)
+     */
+    private Client login(Connection connection) {
+        Client res = new Client(connection);
+        boolean loginFailed = true;
+        ClientRoot root = null;
+        int uniId = -1;
+
+        do {
+            try {
+                refreshActiveIDs();
+                String dataReceived = res.readLine();
+
+                if (dataReceived == null) {
+                    disconnectIfInactive(res, Thread.currentThread());
+                    return res;
+                }
+                if (dataReceived.split("\\$").length != 2) {
+                    logger.print("Received invalid data from: " + res + " data: " + dataReceived, "Wrong data");
+                    res.writeLine("LOGIN$INVALID_SYNTAX$" + dataReceived);
+                    disconnectIfInactive(res, Thread.currentThread());
+                    return res;
+                }
+
+                root = dataReceived.split("\\$")[0].equals("A") ? ClientRoot.ADMIN :
+                        dataReceived.split("\\$")[0].equals("C") ? ClientRoot.CLIENT :
+                                ClientRoot.UNAUTHORIZED;
+                uniId = Integer.parseInt(dataReceived.split("\\$")[1]);
+
+                if (uniId <= 0) {
+                    if (allIds.contains(-uniId)) {
+                        logger.print("The user with id " + (-uniId) + " already exists", "Wrong data");
+                        res.writeLine("LOGIN$INVALID_ID$EXISTS$" + (-uniId));
+                        continue;
+                    }
+
+                    String register = "Successfully registrated new user with root " + root + " and id: " + (-uniId);
+
+                    fileLogger.logToAll("Id file", String.valueOf(-uniId));
+                    logger.print(register, "Registration");
+
+                    res.writeLine("LOGIN$CONNECT$" + root + "$" + Math.abs(uniId));
+                    allIds.add(Math.abs(uniId));
+                    break;
+                } else {
+                    if (allIds.contains(uniId)) {
+                        if (!onlineIds.contains(uniId)) {
+                            loginFailed = false;
+                            res.writeLine("LOGIN$CONNECT$" + root + "$" + Math.abs(uniId));
+                        } else {
+                            logger.print("Failed to login a user with id " + uniId + ": user with this id has already logged in", "Wrong data");
+                            res.writeLine("LOGIN$INVALID_ID$ONLINE$" + (uniId));
+                        }
+                    } else {
+                        logger.print("Failed to login a user with id " + uniId + ": this id is free", "Wrong data");
+                        res.writeLine("LOGIN$INVALID_ID$FREE$" + (uniId));
+                        loginFailed = true;
+                    }
+                }
+            } catch (IOException e) {
+                disconnectIfInactive(res, Thread.currentThread());
+            }
+        } while (loginFailed);
+
+        if (uniId != -1)
+            res = new Client(
+                    connection,
+                    Math.abs(uniId),
+                    root, Thread.currentThread());
+        return res;
     }
 
     /**
@@ -611,10 +714,8 @@ public class Server {
             new Thread(parent, () -> {
                 try {
                     switch (finalAction) {
-                        case "$shutdown" -> {
-                            stopServer();
-                        }
-                        case "$connections" -> { //вывод списка всех активных подключений
+                        case "$shutdown" -> stopServer();
+                        case "$connections" -> {
                             if (connectedClients.size() > 0) {
                                 logger.print("All active connections: ", "Connection");
                                 connectedClients.forEach(client -> logger.print(client.toString(), "Registration"));
@@ -622,7 +723,7 @@ public class Server {
                             } else
                                 logger.print("No active connections", "Disconnection");
                         }
-                        case "$idlist" -> {//вывод всех зарегистрированных id
+                        case "$idlist" -> {
                             if (allIds.size() == 0)
                                 logger.print("No registrated IDs yet", "Disconnection");
                             else {
@@ -630,7 +731,7 @@ public class Server {
                                 allIds.forEach(id -> logger.print(String.valueOf(id), "Default"));
                             }
                         }
-                        case "$help" -> { //вывод справки
+                        case "$help" -> {
                             logger.print("___________________________________", OutputColor.CYAN);
                             logger.print("Help: \n", OutputColor.CYAN);
                             logger.print("""
@@ -644,8 +745,7 @@ public class Server {
                                     """, OutputColor.CYAN);
                         }
                         default -> {
-                            //обработка остальных команд при помощи регулярных выражений
-                            if (finalAction.matches("\\$disconnect[ ]*\\d*[ ]*")) { // - /disconnect [int id]
+                            if (finalAction.matches("\\$disconnect[ ]*\\d*[ ]*")) {
                                 if (finalAction.split("\\$disconnect").length > 0) {
                                     int idToDisconnect = Integer.parseInt(finalAction.split("\\$disconnect ")[1]);
                                     refreshActiveIDs();
@@ -678,14 +778,14 @@ public class Server {
                                         logger.print("No active connectedClients", "Disconnection");
                                     }
                                 }
-                            } else if (finalAction.matches("\\$msg[ ]+[\\d]+[ ]+([\\w][ \\-=*$#]*)+")) { // - /msg <id> <text>
+                            } else if (finalAction.matches("\\$msg[ ]+[\\d]+[ ]+([\\w][ \\-=*$#]*)+")) {
                                 if (finalAction.split("\\$msg").length > 0) {
                                     int idToSend = Integer.parseInt(finalAction.split(" ")[1]);
                                     StringBuilder messageText = new StringBuilder();
                                     for (int i = 2; i < finalAction.split(" ").length; i++)
                                         messageText.append(finalAction.split(" ")[i]);
 
-                                    refreshActiveIDs(); //обновление идентификаторов перед отправкой, иначе возможна отправка несуществующему клиенту
+                                    refreshActiveIDs();
                                     if (onlineIds.contains(idToSend)) {
                                         getClientById(connectedClients, idToSend).writeLine("SYS$MSG$" + messageText);
                                         logger.print("Sent message " + messageText + " to client with id: " + idToSend, "Default");
@@ -693,7 +793,6 @@ public class Server {
                                         logger.print("Client with id: " + idToSend + " isn't connected", "Wrong data");
                                 }
                             } else {
-                                //сообщение о неправильном вводе в консоль
                                 logger.print("Invalid command", "Wrong data");
                                 logger.print("Type $help to show all available commands", OutputColor.CYAN);
                             }
@@ -708,28 +807,33 @@ public class Server {
 
     /**
      * Getting all information about a client
-     * WORK IN PROGRESS
      *
      * @param command A command to get information about
      * @param client  Client who requested information
      */
-    private void getInfo(String command, Client client) {
-        //TODO доделать парсер по id
-        //command - сообщение после getinfo
+    private boolean processInfoCommand(String command, Client client) throws IOException {
+        String[] split = command.split("\\$");
+        if (!split[1].equals("INFO"))
+            return false;
+        if (split.length != 3) {
+            client.writeLine("INFO$ERROR$INVALID_SYNTAX$" + command);
+            System.err.println(split.length);
+            return false;
+        }
+
         new Thread(() -> {
-            String toSend = "INFO$ERROR";
+            String toSend;
 
             if (!adminIds.contains(client.id))
                 toSend = "INFO$ERROR$ACCESS_DENIED";
             else
-                switch (command.toUpperCase(Locale.ROOT)) {
+                switch (split[2].toUpperCase(Locale.ROOT)) {
                     case "ONLINE" -> {
                         StringBuffer sendBuffer = new StringBuffer("INFO$ONLINE$");
                         connectedClients.forEach(socket -> sendBuffer.append(socket.getIp()).append(", ").append(socket.id).append(", ").append("root: ").append(adminIds.contains(socket.id) ? "Admin" : "Client").append(";"));
                         if (sendBuffer.charAt(sendBuffer.length() - 1) == ';')
                             sendBuffer.deleteCharAt(sendBuffer.length() - 1);
                         toSend = sendBuffer.toString();
-                        //logger.print("Admin with id: " + phone.id + " requested online id list:\n" + onlineIds, "Default");
                     }
                     case "REG" -> {
                         toSend = "INFO$REG$" + allIds;
@@ -769,41 +873,24 @@ public class Server {
                         logger.print("SERVER HEALTH: \n" + toSend, "Server state");
                     }
                     default -> {
-                        if (command.matches("[\\d]+")) { //получение ip по id
-                            int idToSend = Integer.parseInt(command);
+                        if (split[2].matches("[\\d]+")) {
+                            int idToSend = Integer.parseInt(split[2]);
                             Client cur = getClientById(connectedClients, idToSend);
                             if (cur != null)
                                 toSend = "INFO$IP" + cur.getIp();
                             else
                                 toSend = "INFO$ERROR$INVALID_ID$" + idToSend;
-                        } else if (command.matches("[\\d]+[ ]+[\\w]+([ ]+[\\d]{2}.[\\d]{2}.[\\d]{4} [\\d]{2}.[\\d]{2}.[\\d]{4})*")) {
-                            //TODO cmd information
-                            //получение информации о команде
-                            ArrayList<String> commands = new ArrayList<>();
-                            ArrayList<String> args = new ArrayList<>();
-                            ArrayList<String> successes = new ArrayList<>();
-
-                            int id = Integer.parseInt(command.split(" ")[0]);
-                            String cmd = command.split(" ")[1];
-                            String allCmd = FileLoader.loadFile(fileLogger.getLogFile("Request file"));
-                            String[] lines = allCmd.split("\n");
-                            for (String line : lines) {
-                                commands.add(line.split("\\$")[3]);
-                                args.add(line.split("\\$")[4]);
-                                successes.add(line.split("\\$")[5]);
-                            }
-                        } else //сообщение о неправильной команде
-                            toSend = "INFO$ERROR$INVALID_SYNTAX$" + command;
+                        } else
+                            toSend = "INFO$ERROR$INVALID_SYNTAX$" + split[2];
                     }
                 }
-
-            //отправка сообщения админу
             try {
                 client.writeLine(toSend);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }).start();
+        return true;
     }
 
     /**
@@ -858,7 +945,7 @@ public class Server {
         String dateToWrite = formatDate(now);
         if (req.equals(Request.ZEROREQUEST)) {
             logger.print("A try to write a zero request into file", "Wrong data");
-        } else { //запись в файл с завершёнными запросами
+        } else {
             writeReq = dateToWrite + "$" + req.idA + "$" + req.idC + "$" + req.cmd + "$" + req.args + "$" + req.success;
             fileLogger.logToAll("Request file", writeReq);
         }
@@ -908,97 +995,6 @@ public class Server {
         fileLogger.clearAll("Command id file");
         fileLogger.logToAll("Command id file", String.valueOf(req.id));
     }
-
-
-    /**
-     * Client registration / login function
-     * Performs all checks for valid access
-     *
-     * @param connection A client to register / login
-     *
-     * @return Array of login results:
-     * [0] - client id,
-     * [1] - client root (-1 - failed, 1 - Admin, 2 - Client)
-     *
-     * @see Connection
-     * @see Server#allIds
-     * @see Server#refreshActiveIDs()
-     * @see Server#disconnectIfInactive(Client, Thread)
-     * @see Server#onlineIds
-     * @see FileLogger#logToAll(String, String)
-     */
-    private Client login(Connection connection) {
-        Client res = new Client(connection);
-        //отправка инфы о подключении клиенту
-        boolean loginFailed = true;
-        ClientRoot root = null;
-        int uniId = -1;
-        //пароли и тд будут позже
-        String dataReceived;
-        //цикл входа / регистрации
-        do { //пока клиент не зарегается или не войдёт
-            try {
-                refreshActiveIDs();
-                dataReceived = res.readLine(); //чтение id клиента
-                if (dataReceived == null) {
-                    disconnectIfInactive(res, Thread.currentThread());
-                    return res;
-                }
-                if (dataReceived.split("\\$").length != 2) {
-                    logger.print("Received invalid data from: " + res + " data: " + dataReceived, "Wrong data");
-                    res.writeLine("LOGIN$INVALID_SYNTAX$" + dataReceived);
-                    disconnectIfInactive(res, Thread.currentThread());
-                    return res;
-                }
-
-                root = dataReceived.split("\\$")[0].equals("A") ? ClientRoot.ADMIN :
-                        dataReceived.split("\\$")[0].equals("C") ? ClientRoot.CLIENT :
-                                ClientRoot.UNAUTHORIZED;
-                uniId = Integer.parseInt(dataReceived.split("\\$")[1]);
-
-                //если id отрицательный, то регистрируем пользователя
-                if (uniId <= 0) {
-                    if (allIds.contains(-uniId)) {
-                        logger.print("The user with id " + (-uniId) + " already exists", "Wrong data");
-                        res.writeLine("LOGIN$INVALID_ID$EXISTS$" + (-uniId));
-                        continue;
-                    }
-
-                    String register = "Successfully registrated new user with root " + root + " and id: " + (-uniId);
-
-                    fileLogger.logToAll("Id file", String.valueOf(-uniId)); //добавление id в список зарегистрированных
-                    logger.print(register, "Registration");
-
-                    res.writeLine("LOGIN$CONNECT$" + root + "$" + Math.abs(uniId));
-                    allIds.add(Math.abs(uniId)); //добавление нашего id в список
-                    break; //окончание цикла входа/регистрации
-                } else { //иначе пытаемся войти
-                    if (allIds.contains(uniId)) {
-                        if (!onlineIds.contains(uniId)) { //id есть в списке, но нет онлайн
-                            loginFailed = false;
-                            res.writeLine("LOGIN$CONNECT$" + root + "$" + Math.abs(uniId));
-                        } else { //id есть в списке и есть онлайн
-                            logger.print("Failed to login a user with id " + uniId + ": user with this id has already logged in", "Wrong data");
-                            res.writeLine("LOGIN$INVALID_ID$ONLINE$" + (uniId));
-                        }
-                    } else { //ошибка логина: такого логина пока нет
-                        logger.print("Failed to login a user with id " + uniId + ": this id is free", "Wrong data");
-                        res.writeLine("LOGIN$INVALID_ID$FREE$" + (uniId));
-                        loginFailed = true;
-                    }
-                }
-            } catch (IOException e) {
-                disconnectIfInactive(res, Thread.currentThread());
-            }
-        } while (loginFailed);
-
-        if (uniId != -1)
-            res = new Client(
-                    connection,
-                    Math.abs(uniId),
-                    root, Thread.currentThread());
-        return res;
-    }
 }
 
 /**
@@ -1017,7 +1013,7 @@ class Request {
     /**
      * Total request count (is used as a unique request id), is restored from file
      */
-    private static long requestCount = 1; //Количество запросов
+    private static long requestCount = 1;
 
     /**
      * Request command
