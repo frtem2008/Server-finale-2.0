@@ -452,10 +452,14 @@ public class Server {
         }
     }
 
+    private void messageInvalidData(Client to, String data) throws IOException {
+        logger.print("Received invalid data from " + to.root + " with id " + to.id, "Wrong data");
+        to.writeLine("INVALID$DATA$" + data);
+    }
+
     private boolean validateAdminReadData(Client admin, String data) throws IOException {
         if (!data.matches("A\\$[\\d]+\\$.+\\$.+")) {
-            logger.print("Received invalid data from admin with id " + admin.id, "Wrong data");
-            admin.writeLine("INVALID$DATA$" + data);
+            messageInvalidData(admin, data);
             return false;
         }
         return true;
@@ -463,8 +467,7 @@ public class Server {
 
     private boolean validateClientReadData(Client client, String data) throws IOException {
         if (!data.matches("C\\$[\\d]+\\$[\\d]+\\$.+")) {
-            logger.print("Received invalid data from client with id " + client.id, "Wrong data");
-            client.writeLine("INVALID$DATA$" + data);
+            messageInvalidData(client, data);
             return false;
         }
         return true;
@@ -490,6 +493,7 @@ public class Server {
 
     private void sendAdminRequest(Client admin, Client client, int clientToSendId, String command, String args) throws IOException {
         refreshActiveIDs();
+        
         if (client == null) {
             logger.print("Sending error: system didn't find an online client with id " + clientToSendId, "Error");
             admin.writeLine("INVALID$OFFLINE_CLIENT$" + clientToSendId);
