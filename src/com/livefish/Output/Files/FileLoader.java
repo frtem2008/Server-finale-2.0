@@ -52,9 +52,10 @@ public class FileLoader {
     }
 
     /**
-     * Load file by it's name
+     * Load file from it's file variable
      *
      * @param f File object to load from
+     *
      * @return Read file data
      */
     public static String loadFile(File f) {

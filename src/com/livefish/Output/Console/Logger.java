@@ -41,15 +41,6 @@ public class Logger {
      * Logger singleton instance
      */
     private static Logger instance = null;
-
-    /**
-     * Does the user want to use colored text
-     *
-     * @see Logger#print(String, String)
-     * @see Logger#print(String, OutputColor)
-     */
-    private boolean useColoredText;
-
     /**
      * Set of all color bytes with their names for better usage
      *
@@ -57,6 +48,13 @@ public class Logger {
      */
 
     private final Set<PrintColor> colors;
+    /**
+     * Does the user want to use colored text
+     *
+     * @see Logger#print(String, String)
+     * @see Logger#print(String, OutputColor)
+     */
+    private boolean useColoredText;
     /**
      * Current logger printing color
      * Some methods ignore it and use the one they got from parameters
@@ -196,9 +194,23 @@ public class Logger {
      *
      * @param toPrint   A string to print
      * @param colorName A color name in logger system to print with
+     *
      * @see Logger#print(String, OutputColor)
      */
     public void print(String toPrint, String colorName) {
+        print(toPrint, getColorByName(colorName).color());
+    }
+
+    /**
+     * Prints a string from new line with color with name colorName and thread mark
+     *
+     * @param toPrint   A string to print
+     * @param colorName A color name in logger system to print with
+     *
+     * @see Logger#print(String, OutputColor)
+     */
+    public void println(String toPrint, String colorName) {
+        System.out.println();
         print(toPrint, getColorByName(colorName).color());
     }
 
@@ -207,6 +219,7 @@ public class Logger {
      *
      * @param toPrint A string to print
      * @param color   A color name in logger system to print with
+     *
      * @see Logger#useColoredText
      * @see OutputColor
      */

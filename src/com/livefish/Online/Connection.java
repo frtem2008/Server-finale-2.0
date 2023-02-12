@@ -9,14 +9,14 @@ import java.util.Objects;
 
 /**
  * Connection representation class
- * Simplifies online communication (comfortable inteface)
+ * Simplifies online communication (comfortable interface)
  * Implements closable, so can be used in try-catch with resources
  *
  * @author NAUMENKO-ZHIVOY ARTEM
  * @version 2.0
  * @see java.io.Closeable
  */
-public class Phone implements Closeable {
+public class Connection implements Closeable {
     /**
      * A socket to communicate through
      */
@@ -32,19 +32,9 @@ public class Phone implements Closeable {
      */
     private final BufferedWriter writer;
 
-    /**
-     * Unique phone id (from registration or login)
-     * For server
-     */
-    public int id; // FIXME: 11.02.2023 Add another object representing connected client / admin
 
     /**
-     * Connection information (for server)
-     */
-    public String connection;
-
-    /**
-     * Is the connection closed (for server)
+     * Is the connection closed
      */
     public boolean closed = false;
 
@@ -54,11 +44,12 @@ public class Phone implements Closeable {
      *
      * @param ip   Server ip to connect to
      * @param port Server port
+     *
      * @see Socket
-     * @see Phone#createReader()
-     * @see Phone#createWriter()
+     * @see Connection#createReader()
+     * @see Connection#createWriter()
      */
-    public Phone(String ip, int port) {
+    public Connection(String ip, int port) {
         try {
             this.socket = new Socket(ip, port);
             this.reader = createReader();
@@ -73,11 +64,12 @@ public class Phone implements Closeable {
      * Server constructor
      *
      * @param server ServerSocket to wait the connection on
+     *
      * @see ServerSocket
-     * @see Phone#createReader()
-     * @see Phone#createWriter()
+     * @see Connection#createReader()
+     * @see Connection#createWriter()
      */
-    public Phone(ServerSocket server) {
+    public Connection(ServerSocket server) {
         try {
             this.socket = server.accept();
             this.reader = createReader();
@@ -92,7 +84,7 @@ public class Phone implements Closeable {
      *
      * @return Created reader
      * @throws IOException Exception during reader creation
-     * @see Phone#socket
+     * @see Connection#socket
      * @see BufferedReader
      */
     private BufferedReader createReader() throws IOException {
@@ -105,7 +97,7 @@ public class Phone implements Closeable {
      *
      * @return Created writer
      * @throws IOException Exception during writer creation
-     * @see Phone#socket
+     * @see Connection#socket
      * @see BufferedWriter
      */
     private BufferedWriter createWriter() throws IOException {
@@ -133,8 +125,8 @@ public class Phone implements Closeable {
      *
      * @param msg A message to send
      * @throws IOException exception during online communication
-     * @see Phone#closed
-     * @see Phone#writer
+     * @see Connection#closed
+     * @see Connection#writer
      */
     public void writeLine(String msg) throws IOException {
         if (!closed) {
@@ -149,8 +141,8 @@ public class Phone implements Closeable {
      *
      * @return Received message
      * @throws IOException exception during online communication
-     * @see Phone#closed
-     * @see Phone#reader
+     * @see Connection#closed
+     * @see Connection#reader
      */
     public String readLine() throws IOException {
         if (!closed)
@@ -163,13 +155,11 @@ public class Phone implements Closeable {
      *
      * @return String representation of a connection
      * @see Object#toString()
-     * @see Phone#id
-     * @see Phone#getIp()
+     * @see Connection#getIp()
      */
     @Override
     public String toString() {
         return "Online.Phone{" +
-                "id=" + id +
                 "ip=" + getIp() +
                 '}';
     }
@@ -200,7 +190,7 @@ public class Phone implements Closeable {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(socket, reader, writer, id, connection, closed);
+        return Objects.hash(socket, reader, writer, closed);
     }
 
     /**
@@ -215,9 +205,8 @@ public class Phone implements Closeable {
             return false;
         if (x == this)
             return true;
-        Phone cur = (Phone) x;
+        Connection cur = (Connection) x;
         return cur.socket == this.socket &&
-                cur.id == this.id &&
                 cur.getIp().equals(this.getIp());
     }
 }
