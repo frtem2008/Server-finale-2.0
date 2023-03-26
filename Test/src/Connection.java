@@ -1,10 +1,5 @@
-package com.livefish.Online;//модуль для облегчения работы с сокетами
-
 import java.io.*;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.Objects;
 
 /**
@@ -14,7 +9,7 @@ import java.util.Objects;
  *
  * @author NAUMENKO-ZHIVOY ARTEM
  * @version 2.0
- * @see java.io.Closeable
+ * @see Closeable
  */
 public class Connection implements Closeable {
     /**
@@ -25,18 +20,18 @@ public class Connection implements Closeable {
     /**
      * Data reader
      */
-    private final BufferedReader reader;
+    private final DataInputStream reader;
 
     /**
      * Data writer
      */
-    private final BufferedWriter writer;
+    private final DataOutputStream writer;
 
 
     /**
      * Is the connection closed
      */
-    public boolean closed = false;
+    public boolean closed;
 
 
     /**
@@ -44,7 +39,6 @@ public class Connection implements Closeable {
      *
      * @param ip   Server ip to connect to
      * @param port Server port
-     *
      * @see Socket
      * @see Connection#createReader()
      * @see Connection#createWriter()
@@ -54,6 +48,7 @@ public class Connection implements Closeable {
             this.socket = new Socket(ip, port);
             this.reader = createReader();
             this.writer = createWriter();
+            this.closed = false;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -64,7 +59,6 @@ public class Connection implements Closeable {
      * Server constructor
      *
      * @param server ServerSocket to wait the connection on
-     *
      * @see ServerSocket
      * @see Connection#createReader()
      * @see Connection#createWriter()
@@ -74,6 +68,7 @@ public class Connection implements Closeable {
             this.socket = server.accept();
             this.reader = createReader();
             this.writer = createWriter();
+            this.closed = false;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -87,8 +82,8 @@ public class Connection implements Closeable {
      * @see Connection#socket
      * @see BufferedReader
      */
-    private BufferedReader createReader() throws IOException {
-        return new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    private DataInputStream createReader() throws IOException {
+        return new DataInputStream(socket.getInputStream());
     }
 
 
@@ -100,8 +95,8 @@ public class Connection implements Closeable {
      * @see Connection#socket
      * @see BufferedWriter
      */
-    private BufferedWriter createWriter() throws IOException {
-        return new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+    private DataOutputStream createWriter() throws IOException {
+        return new DataOutputStream(socket.getOutputStream());
     }
 
     /**
@@ -130,10 +125,26 @@ public class Connection implements Closeable {
      */
     public void writeLine(String msg) throws IOException {
         if (!closed) {
-            writer.write(msg);
-            writer.newLine();
+            writer.writeUTF(msg);
             writer.flush();
-        }
+        } else
+            throw new SocketException("Write failed: connection closed");
+    }
+
+    public void writeLong(Long l) throws IOException {
+        if (!closed) {
+            writer.writeLong(l);
+            writer.flush();
+        } else
+            throw new SocketException("Write failed: connection closed");
+    }
+
+    public void writeBytes(byte[] bytes, int offset, int len) throws IOException {
+        if (!closed) {
+            writer.write(bytes, offset, len);
+            writer.flush();
+        } else
+            throw new SocketException("Write failed: connection closed");
     }
 
     /**
@@ -146,8 +157,20 @@ public class Connection implements Closeable {
      */
     public String readLine() throws IOException {
         if (!closed)
-            return reader.readLine();
-        return null;
+            return reader.readUTF();
+        throw new SocketException("Read failed: connection closed");
+    }
+
+    public Long readLong() throws IOException {
+        if (!closed)
+            return reader.readLong();
+        throw new SocketException("Read failed: connection closed");
+    }
+
+    public int readBytes(byte[] buf, int offset, int len) throws IOException {
+        if (!closed)
+            return reader.read(buf, offset, len);
+        throw new SocketException("Read failed: connection closed");
     }
 
     /**
@@ -159,7 +182,7 @@ public class Connection implements Closeable {
      */
     @Override
     public String toString() {
-        return "Online.Phone{" +
+        return "Test.Connection{" +
                 "ip=" + getIp() +
                 '}';
     }

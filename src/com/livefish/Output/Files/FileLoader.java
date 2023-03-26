@@ -18,6 +18,7 @@ public class FileLoader {
      * Empty default constructor
      */
     public FileLoader() {
+
     }
 
     /**
@@ -36,7 +37,7 @@ public class FileLoader {
     }
 
     /**
-     * Load file by it's name
+     * Load file by its name
      *
      * @param name File name to load
      * @return Read file data
@@ -52,10 +53,9 @@ public class FileLoader {
     }
 
     /**
-     * Load file from it's file variable
+     * Load file from its file variable
      *
      * @param f File object to load from
-     *
      * @return Read file data
      */
     public static String loadFile(File f) {
@@ -65,6 +65,8 @@ public class FileLoader {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
         return sb.toString();
     }
 }
+

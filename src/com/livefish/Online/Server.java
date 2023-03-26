@@ -28,7 +28,7 @@ import java.util.*;
  * @version 2.0
  */
 public class Server {
-    private static final boolean askAboutColoring = false;
+    private static final boolean askAboutColoring = true;
     /**
      * Singleton instance field
      */
@@ -37,6 +37,7 @@ public class Server {
      * Scanner instance for console
      */
     private final Scanner input;
+
     /**
      * List of all client threads for proper thread management
      */
@@ -99,6 +100,7 @@ public class Server {
             initLogger(useColoredText());
         else
             initLogger(true);
+
         initFileLogger();
         setIdCount();
         fillArrays();
@@ -111,7 +113,6 @@ public class Server {
      * Starts a server only once (Singleton)
      *
      * @return Single server instance
-     *
      * @see Server#instance
      * @see Server#Server()
      */
@@ -125,9 +126,7 @@ public class Server {
      * Date formatting function for logging
      *
      * @param date Date to format
-     *
      * @return Formatted date DD.MM.YYYY[HH:MM:SS]
-     *
      * @see LocalDateTime
      */
     private static String formatDate(LocalDateTime date) {
@@ -148,7 +147,6 @@ public class Server {
      * Asks a console user, if they want to use colored console output
      *
      * @return True if colored text will be used in console
-     *
      * @see Server#input
      * @see Logger#print(String, String)
      * @see Logger#addPrintColor(String, OutputColor)
@@ -184,7 +182,6 @@ public class Server {
      * Logger initialization and color binding function
      *
      * @param useColorText will color text be used in console output
-     *
      * @see Logger
      * @see Logger#addPrintColor(String, OutputColor)
      * @see Logger#print(String, String)
@@ -345,7 +342,6 @@ public class Server {
      *
      * @param client  A client to disconnect
      * @param current A current client working thread to interrupt after client will be lost
-     *
      * @see Connection
      * @see Server#writeConnection(int, boolean)
      * @see Server#refreshActiveIDs()
@@ -378,15 +374,14 @@ public class Server {
     }
 
     /**
-     * Gets global ip using http://checkip.amazonaws.com
+     * Gets global ip using <a href="http://checkip.amazonaws.com">...</a>
      *
      * @return Server global ip address
-     *
      * @throws IOException URL is not available
      * @see URL
      */
     private String getServerIp() throws IOException {
-        URL awsHost = new URL("http://checkip.amazonaws.com");
+        URL awsHost = new URL("https://checkip.amazonaws.com");
         BufferedReader in = new BufferedReader(new InputStreamReader(
                 awsHost.openStream()));
 
@@ -407,13 +402,13 @@ public class Server {
      * @see Server#stopServer()
      */
     private void server() {
-        final int SERVER_PORT = 26780;
+        final int SERVER_PORT = 26781;
 
         try (ServerSocket server = new ServerSocket(SERVER_PORT)) {
             logger.print("Server started with ip: " + getServerIp() + " On port: " + SERVER_PORT + "\n", "Yellow");
             writeOnOff("On");
 
-            while (run) {
+            while (true) {
                 Connection connection = new Connection(server);
                 Thread clientThread = new Thread(() -> {
                     Client client = new Client(connection);
@@ -458,7 +453,7 @@ public class Server {
     }
 
     private boolean validateAdminReadData(Client admin, String data) throws IOException {
-        if (!data.matches("A\\$[\\d]+\\$.+\\$.+")) {
+        if (!data.matches("A\\$\\d+\\$.+\\$.+")) {
             messageInvalidData(admin, data);
             return false;
         }
@@ -466,7 +461,7 @@ public class Server {
     }
 
     private boolean validateClientReadData(Client client, String data) throws IOException {
-        if (!data.matches("C\\$[\\d]+\\$[\\d]+\\$.+")) {
+        if (!data.matches("C\\$\\d+\\$\\d+\\$.+")) {
             messageInvalidData(client, data);
             return false;
         }
@@ -493,7 +488,7 @@ public class Server {
 
     private void sendAdminRequest(Client admin, Client client, int clientToSendId, String command, String args) throws IOException {
         refreshActiveIDs();
-        
+
         if (client == null) {
             logger.print("Sending error: system didn't find an online client with id " + clientToSendId, "Error");
             admin.writeLine("INVALID$OFFLINE_CLIENT$" + clientToSendId);
@@ -616,11 +611,9 @@ public class Server {
      * Performs all checks for valid access
      *
      * @param connection A client to register / login
-     *
      * @return Array of login results:
      * [0] - client id,
      * [1] - client root (-1 - failed, 1 - Admin, 2 - Client)
-     *
      * @see Connection
      * @see Server#allIds
      * @see Server#refreshActiveIDs()
@@ -682,7 +675,6 @@ public class Server {
                     } else {
                         logger.print("Failed to login a user with id " + uniId + ": this id is free", "Wrong data");
                         res.writeLine("LOGIN$INVALID_ID$FREE$" + (uniId));
-                        loginFailed = true;
                     }
                 }
             } catch (IOException e) {
@@ -749,7 +741,7 @@ public class Server {
                                     """, OutputColor.CYAN);
                         }
                         default -> {
-                            if (finalAction.matches("\\$disconnect[ ]*\\d*[ ]*")) {
+                            if (finalAction.matches("\\$disconnect *\\d* *")) {
                                 if (finalAction.split("\\$disconnect").length > 0) {
                                     int idToDisconnect = Integer.parseInt(finalAction.split("\\$disconnect ")[1]);
                                     refreshActiveIDs();
@@ -782,7 +774,7 @@ public class Server {
                                         logger.print("No active connectedClients", "Disconnection");
                                     }
                                 }
-                            } else if (finalAction.matches("\\$msg[ ]+[\\d]+[ ]+([\\w][ \\-=*$#]*)+")) {
+                            } else if (finalAction.matches("\\$msg +\\d+ +(\\w[ \\-=*$#]*)+")) {
                                 if (finalAction.split("\\$msg").length > 0) {
                                     int idToSend = Integer.parseInt(finalAction.split(" ")[1]);
                                     StringBuilder messageText = new StringBuilder();
@@ -877,7 +869,7 @@ public class Server {
                         logger.print("SERVER HEALTH: \n" + toSend, "Server state");
                     }
                     default -> {
-                        if (split[2].matches("[\\d]+")) {
+                        if (split[2].matches("\\d+")) {
                             int idToSend = Integer.parseInt(split[2]);
                             Client cur = getClientById(connectedClients, idToSend);
                             if (cur != null)
@@ -902,9 +894,7 @@ public class Server {
      *
      * @param reqSet A set to get request from
      * @param id     A request id to get
-     *
      * @return A request from reqSet with unique id id, Request.ZEROREQUEST if request with id id does not exist
-     *
      * @see Request
      * @see Request#id
      * @see Request#ZEROREQUEST
@@ -920,9 +910,7 @@ public class Server {
      *
      * @param clientSet A set to get client from
      * @param id        A phone id to get
-     *
      * @return A client from clientSet with uniqueId id
-     *
      * @see Client
      * @see Client#id
      */
@@ -936,7 +924,6 @@ public class Server {
      * Writing requests to file function
      *
      * @param req A request to write to file
-     *
      * @see Request
      * @see Server#formatDate(LocalDateTime)
      * @see FileLogger#logToAll(String, String)
@@ -959,7 +946,6 @@ public class Server {
      * Server powering on / turning off logging function
      *
      * @param onOff Log on if "on", Log off if "off"
-     *
      * @see Server#formatDate(LocalDateTime)
      * @see FileLogger#logToAll(String, String)
      */
@@ -975,7 +961,6 @@ public class Server {
      *
      * @param clientID  A connected client id
      * @param connected True, if client connected, false if client disconnected
-     *
      * @see FileLogger#logToAll(String, String)
      * @see Server#formatDate(LocalDateTime)
      */
@@ -990,7 +975,6 @@ public class Server {
      * Saves last request id to file to save request unique ids
      *
      * @param req A last completed request, it's id will be written to file
-     *
      * @see Request
      * @see FileLogger#clearAll(String)
      * @see FileLogger#logToAll(String, String)
@@ -1022,27 +1006,27 @@ class Request {
     /**
      * Request command
      */
-    public String cmd;
+    public final String cmd;
     /**
      * Request command arguments
      */
-    public String args;
+    public final String args;
     /**
      * Request command completion success
      */
-    public String success;
+    public final String success;
     /**
      * Admin id who sent the command
      */
-    public int idA;
+    public final int idA;
     /**
      * Client id who attempted to do the command
      */
-    public int idC;
+    public final int idC;
     /**
      * Request unique id
      */
-    public long id;
+    public final long id;
 
 
     /**
@@ -1072,7 +1056,6 @@ class Request {
      *
      * @param what    A request to set success
      * @param success Command execution result
-     *
      * @see Server#updateIdCommandsFile(Request)
      */
     public Request(Request what, String success) {
